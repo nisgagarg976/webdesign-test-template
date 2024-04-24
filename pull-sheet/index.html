@@ -1,138 +1,200 @@
----
-layout: default
-title: Update Spreadsheet
----
-
-<!--These are JavaScript Libraries-->
-<!-- <script type="text/javascript" src="https://requirejs.org/docs/release/2.3.5/minified/require.js"></script> -->
-
-<script type="text/javascript" src="papaparse.min.js"></script> <!-- https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.1.0/papaparse.min.js -->
-<script type="text/javascript" src="js-yaml.min.js"></script> <!-- https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js -->
-<script type="text/javascript" src="github.js"></script>
-
-<h1>Update</h1>
-<script type="text/javascript">
-
-    // dict of all published sheets and corresponding resource names
-    var $resources = {
-        team: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR9Bopp7wygWjBmMaN8_hc4tytmtRc88Dehu1W9B-pjetK_LRcTahB7tRpSPY-tKeAK5w93TC-DKElE/pub?gid=253503174&single=true&output=tsv'
-    }
-
-    var header_maps = {
-        team: {
-            "Acknowledgement": "acknowledgement",
-            "Department / Center / School": "affiliation",
-            "Alumni?": "alumni",
-            "What do you do now?": "alumni_current",
-            "Short bio 1": "bio1",
-            "Short bio 2": "bio2",
-            "Short bio 3": "bio3",
-            "Short bio 4": "bio4",
-            "Display?": "display",
-            "email": "email",
-            "Image": "image",
-            "Name": "name",
-            "Position": "position",
-            "Timestamp": "timestamp",
-            "Year of joining": "year",
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Members</title>
+    <style>
+        /* Styles for team members */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f8f8f8;
+            color: #333;
+            margin: 0;
+            padding: 0;
         }
-    }
 
-    // some constants related to gh-pages repository
-    var $org = 'gsaurabhr';
-    var $repo = 'webdesign-test-template';
-    var $branch = 'gh-pages';
-    
-    // this function extracts parameters from the URL to pass on to the javascript
-    function getUrlVar(key){
-        var result = new RegExp(key + "=([^&]*)", "i").exec(window.location.search);
-        return result && unescape(result[1]) || "";
-    }
-
-    function getGDriveDlURL(url){
-        // reference: https://github.com/UltiRequiem/drive_link/blob/main/mod.ts
-        const regexp = /https:\/\/drive\.google\.com\/open\?id=(?<id>.*?)$/;
-        if (regexp.test(url)) {
-            const res = regexp.exec(url);
-            var id = res?.groups?.id;
-            return `https://drive.google.com/thumbnail?id=${id.trim()}&sz=w300`
+        h1 {
+            text-align: center;
+            margin-top: 30px;
+            color: burlywood;
         }
-        return url;
+
+        .team-members-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .team-member {
+            flex: 1 1 45%; /* Each team member takes up 45% of the container width */
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            background-color: #fff;
+            transition: all 0.3s ease;
+        }
+
+        .team-member:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .team-member img {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .member-info h2 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        .member-info p {
+            margin: 10px 0;
+            color: #666;
+        }
+
+        /* Styles for filter */
+        .filter-container {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .filter-button {
+            margin-right: 10px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+      
+        .filter-button.active {
+            background-color: black;
+            color: white;
+        }
+
+        /* Style for search input */
+        #searchInput {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 200px;
+            display: block;
+            margin: 0 auto;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Team Members</h1>
+
+<!-- Search input field -->
+<input type="text" id="searchInput" placeholder="Search by position">
+
+<!-- Buttons for positions -->
+<div class="filter-container">
+    <button class="filter-button" data-value="Professor">Professor</button>
+    <button class="filter-button" data-value="PhD">PhD</button>
+    <button class="filter-button" data-value="MS(R)">MS(R)</button>
+    <button class="filter-button" data-value="Research Assistant">Research Assistant</button>
+    <button class="filter-button" data-value="Undergraduate student">Undergraduate</button>
+    <button class="filter-button" data-value="Intern">Intern</button>
+    <button class="filter-button" data-value="MSc">MSc</button>
+</div>
+
+<!-- Team members container -->
+<div class="team-members-container" id="team-members"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.1.0/papaparse.min.js"></script>
+<script>
+    var teamURL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR9Bopp7wygWjBmMaN8_hc4tytmtRc88Dehu1W9B-pjetK_LRcTahB7tRpSPY-tKeAK5w93TC-DKElE/pub?gid=253503174&single=true&output=tsv';
+    // var defaultAvatar = 'https://tse3.mm.bing.net/th?id=OIP.Cl56H6WgxJ8npVqyhefTdQHaHa&pid=Api&P=0&h=180'; // URL of the default avatar image
+
+    // Function to display team members based on filter selection and search input
+    function displayTeamMembers() {
+        var teamMembersDiv = document.getElementById('team-members');
+        teamMembersDiv.innerHTML = ''; // Clear previous content
+        var filters = document.querySelectorAll('.filter-button.active');
+        var searchInput = document.getElementById('searchInput').value.trim().toLowerCase();
+
+        Papa.parse(teamURL, {
+            download: true,
+            header: true,
+            complete: function(results) {
+                var data = results.data;
+                data.forEach(function(member) {
+                    if ((filters.length === 0 || Array.from(filters).some(filter => member.Position.includes(filter.dataset.value))) &&
+                        (searchInput === '' || member.Position.toLowerCase().includes(searchInput))) {
+                        var memberDiv = document.createElement('div');
+                        memberDiv.classList.add('team-member');
+
+                        var memberInfoDiv = document.createElement('div');
+                        memberInfoDiv.classList.add('member-info');
+
+                        // Display member's image
+                        var image = document.createElement('img');
+                        image.src = member['Image'] && member['Image'].trim() !== '' ? member['Image'] : defaultAvatar; // If member image is not available or empty, use default avatar
+                        memberDiv.appendChild(image);
+
+                        // Display member's name and position
+                        var nameHeading = document.createElement('h2');
+                        nameHeading.textContent = member['Name'];
+                        memberInfoDiv.appendChild(nameHeading);
+                        var positionPara = document.createElement('p');
+                        positionPara.textContent = member['Position'];
+                        memberInfoDiv.appendChild(positionPara);
+
+                        // Display member's bio
+                        var bioPara1 = document.createElement('p');
+                        bioPara1.textContent = member['Short bio 1'];
+                        memberInfoDiv.appendChild(bioPara1);
+
+                        // Display member's email
+                        var emailPara = document.createElement('p');
+                        emailPara.textContent = 'Email: ' + member['email'];
+                        memberInfoDiv.appendChild(emailPara);
+
+                        // Display member's department / center / school
+                        var departmentPara = document.createElement('p');
+                        departmentPara.textContent = 'Department / Center / School: ' + member['Department / Center / School'];
+                        memberInfoDiv.appendChild(departmentPara);
+
+                        memberDiv.appendChild(memberInfoDiv);
+                        teamMembersDiv.appendChild(memberDiv);
+                    }
+                });
+            }
+        });
     }
 
-    // extract parameters that need to be passed and should not be saved
-    var $GHToken = getUrlVar('ghtoken');
+    // Parse the team data and display initially
+    displayTeamMembers();
 
-    // variables that we will need later
-    var $yaml_store = "";
-    // var $resource = "";
-
-    function init() {
-        $.each($resources, function(name, url) {
-            // $resource = name;
-            function cb(results) {
-                showInfo(results, name);
-            }
-
-            function map_header(header, index) {
-                return header_maps[name][header];
-            }
-
-            function map_values(value, header) {
-                if ( header == "image" ) {return getGDriveDlURL(value);}
-                if ( header == "display") {return parseInt(value);}
-                if ( header == "alumni") {return parseInt(value);}
-                if ( header == "highlight") {return parseInt(value);}
-                if ( header == "conference") {return parseInt(value);}
-                return value;
-            }
-
-            Papa.parse(url, {
-                delimiter: "\t",
-                download: true,
-                skipEmptyLines: 'greedy',
-                dynamicTyping: 'true',
-                header: true,
-                transformHeader: map_header,
-                transform: map_values,
-                complete: cb
-            });
+    // Add event listener to buttons and search input for dynamic filtering
+    var filterButtons = document.querySelectorAll('.filter-button');
+    filterButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+            this.classList.toggle('active');
+           
+            displayTeamMembers();
         });
-    };
+    });
 
-    window.addEventListener('DOMContentLoaded', init)
-
-    function showInfo(results, $resource) {
-        // var GitHub = require('github-api');
-        console.log($resource);
-        console.log(results.data);
-        console.log(results.errors);
-        console.log(results.meta);
-        var data = results.data
-          
-        // data comes through as a simple array since simpleSheet is turned on
-        alert("Successfully processed " + data.length + " rows for " + $resource + "!")
-         
-        $items = new Array();
-
-        $.each( data, function(i, service) {
-            $p = {};
-            $.each(service, function($key, $value) {
-              $p[$key] = $value;
-            });
-            $items.push($p);
-        });
-
-        console.log($items);
-        
-        $yaml_dump = jsyaml.dump($items);
-        document.getElementById('source').value = $yaml_dump;
-
-        var github = new Github({token: $GHToken, auth: "oauth"});
-        var repo = github.getRepo($org, $repo);
-        $writepath = '_data/' + $resource + '.yaml';
-        
-        repo.write($branch, $writepath, $yaml_dump, 'Update ' + $resource, function(err) { console.log(err); });
-    };
+    var searchInput = document.getElementById('searchInput');
+    searchInput.addEventListener('input', function() {
+        displayTeamMembers();
+    });
 </script>
-<textarea cols="10" rows="5" id="source" style="border: 1px solid #000; width: 100%; height: 500px;"></textarea>
+
+</body>
+</html>
